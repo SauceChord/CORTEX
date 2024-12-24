@@ -14,10 +14,10 @@ config = configparser.ConfigParser()
 # Read the configuration file
 config.read('config.ini')
 be_verbose = config.getboolean('Settings', 'be_verbose')
-
+history_size = config.getint('Settings', 'history_size')
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-instructions = {"role": "system", "content": "You are a helpful assistant who execute powershell command lines. Do not use markdown for responses as the user is using a powershell console which doesn't support markdown. Feel free to use color codes instead."}
+instructions = [{"role": "system", "content": "You are a helpful assistant who execute powershell command lines."}, {"role": "user", "content": "When you respond, do not use markdown. Use plaintext."}]
 chat_history = []
 
 RED = '\033[31m'   # Red color
@@ -132,8 +132,17 @@ def set_verbose(enabled):
     with open('config.ini', 'w') as configfile:
         config.write(configfile)
 
+def set_history_size(size:int):
+    """Sets the chat history length for the conversation between the user and AI"""
+    global history_size
+    global config
+    history_size = int(size)
+    config.set('Settings', 'history_size', str(history_size))
+    with open('config.ini', 'w') as configfile:
+        config.write(configfile)
+
 # Build function metadata dynamically
-available_functions = [set_verbose, make_python_function]
+available_functions = [set_verbose, set_history_size, make_python_function]
 function_metadata = [generate_function_metadata(func) for func in available_functions]
 
 # Map for calling the functions
@@ -156,7 +165,7 @@ def chat_with_ai():
         try:
             response = client.chat.completions.create(
                 model="gpt-4o-mini",  # Use a model that supports function calling
-                messages=[instructions] + chat_history,
+                messages=instructions + chat_history,
                 tools=function_metadata,
             )            
 
@@ -167,21 +176,25 @@ def chat_with_ai():
             print(f"{RED}Error: {RESET}", e)
 
 def print_message(response):
-    message = response.choices[0].message
     global chat_history
+    global history_size
+
+    message = response.choices[0].message
 
     if (message.content):
         #print(f"{GREEN}AI: {RESET}", render_markdown(message.content))
         print(f"{GREEN}AI: {RESET}", message.content)
         chat_history.append({"role": "assistant", "content": message.content})
 
-    if len(chat_history) > 10:
-        chat_history = chat_history[-10:]
+    if len(chat_history) > history_size:
+        chat_history = chat_history[-history_size:]
 
 def handle_function(response):
-    message = response.choices[0].message
     global chat_history
     global be_verbose
+
+    message = response.choices[0].message
+
     if message.tool_calls == None:
         return
     
