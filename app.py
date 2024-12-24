@@ -4,7 +4,6 @@ import os
 from colorama import init, Fore, Style
 from dotenv import load_dotenv
 from openai import OpenAI
-import render_markdown
 load_dotenv()
 
 import configparser
@@ -182,7 +181,6 @@ def print_message(response):
     message = response.choices[0].message
 
     if (message.content):
-        #print(f"{GREEN}AI: {RESET}", render_markdown(message.content))
         print(f"{GREEN}AI: {RESET}", message.content)
         chat_history.append({"role": "assistant", "content": message.content})
 
