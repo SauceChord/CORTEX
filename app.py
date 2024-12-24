@@ -4,25 +4,54 @@ import os
 from colorama import init, Fore, Style
 from dotenv import load_dotenv
 from openai import OpenAI
-
+import render_markdown
 load_dotenv()
+
+import configparser
+global config 
+config = configparser.ConfigParser()
+
+# Read the configuration file
+config.read('config.ini')
+be_verbose = config.getboolean('Settings', 'be_verbose')
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-instructions = {"role": "system", "content": "You are a helpful assistant who execute bash command lines."}
+instructions = {"role": "system", "content": "You are a helpful assistant who execute powershell command lines. Do not use markdown for responses as the user is using a powershell console which doesn't support markdown. Feel free to use color codes instead."}
 chat_history = []
 
-# Map Python types to JSON Schema-compatible types
-TYPE_MAPPING = {
-    int: "integer",
-    float: "number",
-    str: "string",
-    bool: "boolean",
-    list: "array",
-    dict: "object"
-}
+RED = '\033[31m'   # Red color
+GREEN = '\033[32m' # Green color
+RESET = '\033[0m'  # Reset to default color
 
-# Helper to generate function metadata from annotations
+import inspect
+import importlib.util
+
+def make_python_function(filename: str, sourcecode: str):
+    """Makes a python file with specified source code. Make sure the function have a descriptive docstring."""
+    global function_map
+    global available_functions
+    global function_metadata
+    global be_verbose
+    filename = "gen/" + filename
+    # Load the module
+    with open(filename, 'w') as f:
+        f.write(sourcecode)
+
+    spec = importlib.util.spec_from_file_location('my_module', filename)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    # Show the functions in the module
+    functions = inspect.getmembers(module, inspect.isfunction)
+    for name, func in functions:
+        available_functions.append(func)
+        function_metadata.append(generate_function_metadata(func))
+        if be_verbose:
+            print(f"Function name: {name}, function object: {func}")
+    
+    function_map = {func.__name__: func for func in available_functions}
+
 def generate_function_metadata(func):
     """Generate metadata for OpenAI's functions parameter from a Python function."""
     sig = inspect.signature(func)
@@ -56,37 +85,30 @@ def generate_function_metadata(func):
             }
         }
     }
-RED = '\033[31m'   # Red color
-GREEN = '\033[32m' # Green color
-RESET = '\033[0m'  # Reset to default color
 
+# Map Python types to JSON Schema-compatible types
+TYPE_MAPPING = {
+    int: "integer",
+    float: "number",
+    str: "string",
+    bool: "boolean",
+    list: "array",
+    dict: "object"
+}
 
 def load_python_functions():    
+    global be_verbose
     files = [f for f in os.listdir("./gen") if os.path.isfile("gen/" + f)]
-    print(files)
+    if be_verbose:
+        print(files)
     for file in files:
         load_python_function("gen/" + file)
 
 def load_python_function(filename):
-    spec = importlib.util.spec_from_file_location('my_module', filename)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-
-    # Show the functions in the module
-    functions = inspect.getmembers(module, inspect.isfunction)
-    for name, func in functions:
-        available_functions.append(func)
-        function_metadata.append(generate_function_metadata(func))
-        print(f"Function name: {name}, function object: {func}")
+    global available_functions
+    global function_metadata
     global function_map
-    function_map = {func.__name__: func for func in available_functions}
-
-def make_python_function(filename: str, sourcecode: str):
-    """Makes a python file with specified source code. Make sure the function have a descriptive docstring."""
-    filename = "gen/" + filename
-    # Load the module
-    with open(filename, 'w') as f:
-        f.write(sourcecode)
+    global be_verbose
 
     spec = importlib.util.spec_from_file_location('my_module', filename)
     module = importlib.util.module_from_spec(spec)
@@ -97,12 +119,21 @@ def make_python_function(filename: str, sourcecode: str):
     for name, func in functions:
         available_functions.append(func)
         function_metadata.append(generate_function_metadata(func))
-        print(f"Function name: {name}, function object: {func}")
-    global function_map
+        if be_verbose:
+            print(f"Function name: {name}, function object: {func}")
     function_map = {func.__name__: func for func in available_functions}
+
+def set_verbose(enabled):
+    """Sets the terminal verbosity for the user. The argument can either be true or false."""
+    global be_verbose
+    global config
+    be_verbose = enabled == "true"
+    config.set('Settings', 'be_verbose', str(be_verbose))
+    with open('config.ini', 'w') as configfile:
+        config.write(configfile)
 
 # Build function metadata dynamically
-available_functions = [make_python_function]
+available_functions = [set_verbose, make_python_function]
 function_metadata = [generate_function_metadata(func) for func in available_functions]
 
 # Map for calling the functions
@@ -140,6 +171,7 @@ def print_message(response):
     global chat_history
 
     if (message.content):
+        #print(f"{GREEN}AI: {RESET}", render_markdown(message.content))
         print(f"{GREEN}AI: {RESET}", message.content)
         chat_history.append({"role": "assistant", "content": message.content})
 
@@ -149,6 +181,7 @@ def print_message(response):
 def handle_function(response):
     message = response.choices[0].message
     global chat_history
+    global be_verbose
     if message.tool_calls == None:
         return
     
@@ -158,7 +191,8 @@ def handle_function(response):
 
         if function_name in function_map:
             result = function_map[function_name](**arguments)
-            print(f"{GREEN}Function{RESET} '{function_name}' called with {GREEN}arguments{RESET} {arguments}. {GREEN}Result:{RESET}\n{result}")
+            if be_verbose:
+                print(f"{GREEN}Function{RESET} '{function_name}' called with {GREEN}arguments{RESET} {arguments}. {GREEN}Result:{RESET}\n{result}")
             chat_history.append({"role": "user", "content": f"Function '{function_name}' called with arguments {arguments}. Result: {result}"})
         else:
             print(f"Function '{function_name}' is not recognized.")
