@@ -16,7 +16,7 @@ be_verbose = config.getboolean('Settings', 'be_verbose')
 history_size = config.getint('Settings', 'history_size')
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-instructions = [{"role": "system", "content": "You are a helpful assistant who execute powershell command lines."}, {"role": "user", "content": "When you respond, do not use markdown. Use plaintext."}]
+instructions = [{"role": "system", "content": "You are a helpful assistant who execute powershell command lines."}, {"role": "user", "content": "Your responses must NOT use markdown. Use plaintext. Remember this."}]
 chat_history = []
 
 RED = '\033[31m'   # Red color
@@ -154,7 +154,7 @@ def chat_with_ai():
     while True:
         global chat_history
         # Get user input
-        user_input = input(f"{GREEN}You: {RESET}")
+        user_input = input(f"{GREEN}{os.getcwd()}: {RESET}")
         if user_input.lower() == "exit":
             print("Ending chat. Goodbye!")
             break
