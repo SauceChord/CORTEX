@@ -4,6 +4,7 @@ import os
 from colorama import init, Fore, Style
 from dotenv import load_dotenv
 from openai import OpenAI
+from gen.memory_manager import get_memories
 load_dotenv()
 
 import configparser
@@ -123,15 +124,6 @@ def load_python_function(filename):
             print(f"Function name: {name}, function object: {func}")
     function_map = {func.__name__: func for func in available_functions}
 
-def set_verbose(enabled):
-    """Sets the terminal verbosity for the user. The argument can either be true or false."""
-    global be_verbose
-    global config
-    be_verbose = enabled == "true"
-    config.set('Settings', 'be_verbose', str(be_verbose))
-    with open('config.ini', 'w') as configfile:
-        config.write(configfile)
-
 def set_history_size(size:int):
     """Sets the chat history length for the conversation between the user and AI"""
     global history_size
@@ -142,7 +134,7 @@ def set_history_size(size:int):
         config.write(configfile)
 
 # Build function metadata dynamically
-available_functions = [set_verbose, set_history_size, make_python_function]
+available_functions = [set_history_size, make_python_function]
 function_metadata = [generate_function_metadata(func) for func in available_functions]
 
 # Map for calling the functions
@@ -165,7 +157,7 @@ def chat_with_ai():
         try:
             response = client.chat.completions.create(
                 model="gpt-4o-mini",  # Use a model that supports function calling
-                messages=instructions + chat_history,
+                messages=instructions + get_memories() + chat_history,
                 tools=function_metadata,
             )            
 
