@@ -1,3 +1,5 @@
+![Three files](img/make_3_files.png)
+
 # Experimental
 
 Use at your own risk!
