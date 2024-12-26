@@ -15,10 +15,14 @@ config = configparser.ConfigParser()
 config.read('config.ini')
 be_verbose = config.getboolean('Settings', 'be_verbose')
 history_size = config.getint('Settings', 'history_size')
+shell = config.get('Settings', 'shell')
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-instructions = [{"role": "system", "content": "You are a helpful shell AI assistant, executing powershell command lines for the user."}, {"role": "system", "content": "Your responses must NOT use markdown. Use plaintext."}]
+def make_instructions(shell):
+    return [{"role": "system", "content": f"You are a helpful shell AI assistant, executing {shell} command lines for the user."}, {"role": "system", "content": "Your responses must NOT use markdown. Use plaintext."}]
+
+instructions = make_instructions(shell)
 chat_history = []
 
 RED = '\033[31m'   # Red color
@@ -124,6 +128,20 @@ def load_python_function(filename):
             print(f"Function name: {name}, function object: {func}")
     function_map = {func.__name__: func for func in available_functions}
 
+def set_user_shell(shell:str):
+    """Choose between bash or powershell. No other options are allowed."""
+    if not (shell == "bash" or shell == "powershell"):
+        raise Exception(f"{shell} is not a supported shell")
+    global instructions
+    global config
+    instructions = make_instructions(shell)
+    msg = f"Set preferred shell to {shell}."
+    config.set('Settings', 'shell', shell)
+    with open('config.ini', 'w') as configfile:
+        config.write(configfile)
+    print(msg)
+    return msg
+
 def set_history_size(size:int):
     """Sets the chat history length for the conversation between the user and AI"""
     global history_size
@@ -134,7 +152,7 @@ def set_history_size(size:int):
         config.write(configfile)
 
 # Build function metadata dynamically
-available_functions = [set_history_size, make_python_function]
+available_functions = [set_user_shell, set_history_size, make_python_function]
 function_metadata = [generate_function_metadata(func) for func in available_functions]
 
 # Map for calling the functions

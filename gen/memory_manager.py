@@ -8,4 +8,4 @@ def remember(memory:str):
 
 def get_memories():
     """Returns a list of memories"""
-    return [{'role': 'system', 'content': m} for m in memories]
+    return [{'role': 'system', 'content': f"AI Memory: {m}"} for m in memories]
