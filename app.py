@@ -18,7 +18,7 @@ history_size = config.getint('Settings', 'history_size')
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-instructions = [{"role": "system", "content": "You are a help shell AI assistant, executing powershell command lines for the user. When asked who you are, you are the Ghost in the Shell."}, {"role": "system", "content": "Your responses must NOT use markdown. Use plaintext. Remember this."}]
+instructions = [{"role": "system", "content": "You are a helpful shell AI assistant, executing powershell command lines for the user."}, {"role": "system", "content": "Your responses must NOT use markdown. Use plaintext."}]
 chat_history = []
 
 RED = '\033[31m'   # Red color
