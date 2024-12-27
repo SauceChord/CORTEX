@@ -1,4 +1,4 @@
-![Three files](img/make_3_files.png)
+![Three files](img/demo.png)
 
 # Experimental
 
@@ -62,18 +62,18 @@ python app.py
 ## Known issues
 
 - It doesn't strip away markdown always
-- Sometimes it creates a new python function (under `./gen`) instead of carrying out the command
+- It can behave strangely in multistep requests where a step fails
+- Sometimes it asks if it should perform an action, but performs it anyway
 
 ## Additional Notes
 - Make sure to configure any necessary settings in `config.ini` before running the application.
-- You can also ask the app to change some of the settings, like
-  - `set the history size to 10`
-  - `use the bash shell`
 
 ## Example
 
 ```
 E:\repos-own\aitoy: summarize the file length of all files in this folder and any subfolders, in megabytes.
-> Get-ChildItem -Recurse | Measure-Object -Property Length -Sum | ForEach-Object { [math]::round($_.Sum / 1MB, 2) }
-36
+CORTEX: Searching for all files in the current directory and subdirectories to calculate their total length in megabytes.
+> Get-ChildItem -Recurse | Measure-Object -Property Length -Sum | ForEach-Object { $_.Sum / 1MB }
+50.9207334518433
+CORTEX: The total length of all files in the folder and its subfolders is approximately 50.92 MB.
 ```

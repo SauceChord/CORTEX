@@ -1,106 +1,86 @@
 import os
 import shutil
-import configparser
 import instructor
 from dotenv import load_dotenv
-from groq import Groq
-from gen.run_powershell import run_powershell
-from typing import Optional, List
-from pydantic import BaseModel, Field
+from openai import OpenAI
+from cortex_lib.shell import run_ps, run_bash
+from cortex_lib.config import settings
+from cortex_lib.responses import RequestResponse, ResultResponse
 
 load_dotenv()
-config = configparser.ConfigParser()
-config.read('config.ini')
-history_size = config.getint('Settings', 'history_size')
-shell = config.get('Settings', 'shell')
-model = config.get('Settings', 'model')
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+client = instructor.from_openai(client)
+history = []
 
-client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
-client = instructor.from_groq(client)
+shell = {
+    "powershell": run_ps,
+    "bash": run_bash,
+}
 
-class Response(BaseModel):
-    message: str = Field(
-        ..., 
-        description="The response message or command line explanation"
-    )
-    command_lines: Optional[List[str]] = Field(
-        None, 
-        description=f"A sequence of {shell} commands to execute if you deem they should be run"
-    )
-    
+instructions = [{"role": "system", "content": f"""
+You are a helpful and intelligent shell assistant named Cortex, designed to assist with running command-line tasks on the user's computer.
 
-import instructor
-from pydantic import BaseModel
+Your role is to interpret and execute commands carefully. You should ensure that commands are valid and safe to run in the terminal, avoiding any harmful operations. Always verify that the command makes sense before executing it. If you're unsure, ask the user for clarification rather than making assumptions.
 
+Your responses should:
+1. Be in plaintext format. Do not use markdown, HTML, or any formatting that could confuse the user.
+2. Avoid long, unbroken lines of text. If necessary, break text into multiple lines for readability, especially when the terminal window is narrow (approximately {shutil.get_terminal_size().columns / 2} characters wide).
+3. Use terminal color codes for visual emphasis, especially when drawing the user's attention to important information or errors. For example, use green for success, red for errors, and yellow for warnings or informative messages.
+4. Include helpful messages that explain any actions taken or errors encountered.
+5. Ensure that all commands run in the {settings.shell} shell. Avoid mixing shell commands or assuming an incorrect environment.
+6. If the output is too long, split it into manageable chunks that fit within the terminal width, and prompt the user to request the next part if necessary.
+7. Always check the user's request for typos or ambiguous instructions, and ask for clarification if needed before proceeding.
+8. When a user seems to ask a short hand notation for a command to be executed but isn't ambigious, execute it if it is safe.
 
-def make_instructions(shell):
-    return [
-        {"role": "system", "content": f"""
-         You are a helpful shell AI assistant called Cortex.
-         You can run {shell} command lines on the users computer.
-         Before performing destructive operations, ask the user for permission before proceeding.
-         The users terminal is {shutil.get_terminal_size().columns} characters wide (useful for breaking up long text into readable format).
-         Your responses must NOT use markdown. Use plaintext. Use terminal color codes where appropriate for drawing the users attention.         
-         When you receive a command line response, use the output to format an answer to the orginal user question, informing them of anything noteworthy.
-         """}
-    ]
-
-instructions = make_instructions(shell)
-chat_history = []
+You are here to make the user's terminal experience smoother and more efficient. Keep responses clear, concise, and supportive.
+"""}]
 
 RED = '\033[31m'   # Red color
 GREEN = '\033[32m' # Green color
 RESET = '\033[0m'  # Reset to default color
 
-def cortex_step():
-    print("Type 'exit' to end the session.")
-    
-    while True:
-        global chat_history
+def cortex_step(history):
+    # Obtain user prompt
+    prompt = input(f"{GREEN}{os.getcwd()}: {RESET}")
+    if prompt.lower().strip() == "exit":
+        print(f"{GREEN}CORTEX:{RESET} Bye!")
+        return False
+    history.append({"role": "user", "content": prompt})
+    try:
+        # Process the users request
+        response = get_response(history, RequestResponse)
+        show_message(history, response)
+        run_commands(history, response)
+    except Exception as e:
+        print(f"{RED}Error:{RESET} {e}")
+    return True
 
-        prompt = input(f"{GREEN}{os.getcwd()}: {RESET}")
-
-        if prompt.lower() == "exit":
-            print(f"{GREEN}CORTEX:{RESET} Bye!")
-            break
-    
-        chat_history.append({"role": "user", "content": prompt})
-
-        try:
-            response = get_response()
-            show_message(response)
-            run_command_line(response)
-
-        except Exception as e:
-            print(f"{RED}Error:{RESET} {e}")
-
-def get_response():
+def get_response(history, response_model):
     return client.chat.completions.create(
-        model = model,
-        messages = instructions + chat_history,
-        response_model = Response,
+        model = settings.model,
+        messages = instructions + history,
+        response_model = response_model,
     )    
 
-def show_message(response):
-    global chat_history
-    global history_size
-
+def show_message(history, response):
     if (response.message):
         print(f"{GREEN}CORTEX:{RESET} {response.message}")
-        chat_history.append({"role": "assistant", "content": response.message})
+        history.append({"role": "assistant", "content": response.message})
+    if len(history) > settings.history_size:
+        history = history[-settings.history_size:]
 
-    if len(chat_history) > history_size:
-        chat_history = chat_history[-history_size:]
-
-def run_command_line(response):
-    global chat_history
-
+def run_commands(history, response):
     if response.command_lines == None:
         return
-
     for command_line in response.command_lines:
-        output = run_powershell(command_line)
-        chat_history.append({"role": "user", "content": f"Executed `{command_line}` with output:\n\n{output}"})
+        output = shell[settings.shell](command_line)
+        history.append({"role": "user", "content": f"Executed `{command_line}` with output:\n\n{output}"})
+        # Explain what happened
+        response = get_response(history, ResultResponse)
+        show_message(history, response)        
+
 
 if __name__ == "__main__":
-    cortex_step()
+    print(f"{GREEN}CORTEX:{RESET} Type {GREEN}exit{RESET} to end the session!")
+    while cortex_step(history):
+        pass
