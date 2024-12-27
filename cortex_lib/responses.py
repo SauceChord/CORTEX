@@ -15,5 +15,5 @@ class RequestResponse(BaseModel):
 class ResultResponse(BaseModel):
     message: str = Field(
         ..., 
-        description="An explanation of the output of the recently ran command by you. On any errors, try to guide the user to a solution."
+        description="A brief explanation of the output of the recently ran command by you. On any errors, try to guide the user to a solution."
     )

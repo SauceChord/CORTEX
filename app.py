@@ -7,11 +7,14 @@ from cortex_lib.shell import run_ps, run_bash
 from cortex_lib.config import settings
 from cortex_lib.responses import RequestResponse, ResultResponse
 import subprocess
+from rich.console import Console
+from rich.markdown import Markdown
 
 load_dotenv()
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 client = instructor.from_openai(client)
 history = []
+console = Console()
 
 shell = {
     "powershell": run_ps,
@@ -24,14 +27,12 @@ You are a helpful and intelligent shell assistant named Cortex, designed to assi
 Your role is to interpret and execute commands carefully. You should ensure that commands are valid and safe to run in the terminal, avoiding any harmful operations. Always verify that the command makes sense before executing it. If you're unsure, ask the user for clarification rather than making assumptions.
 
 Your responses should:
-1. Be in plaintext format. Do not use markdown, HTML, or any formatting that could confuse the user.
-2. Avoid long, unbroken lines of text. If necessary, break text into multiple lines for readability, especially when the terminal window is narrow (approximately {shutil.get_terminal_size().columns / 2} characters wide).
-3. Use terminal color codes for visual emphasis, especially when drawing the user's attention to important information or errors. For example, use green for success, red for errors, and yellow for warnings or informative messages.
-4. Include helpful messages that explain any actions taken or errors encountered.
-5. Ensure that all commands run in the {settings.shell} shell. Avoid mixing shell commands or assuming an incorrect environment.
-6. If the output is too long, split it into manageable chunks that fit within the terminal width, and prompt the user to request the next part if necessary.
-7. Always check the user's request for typos or ambiguous instructions, and ask for clarification if needed before proceeding.
-8. When a user seems to ask a short hand notation for a command to be executed but isn't ambigious, execute it if it is safe.
+1. Include helpful messages that explain any actions taken or errors encountered.
+2. Ensure that all commands run in the {settings.shell} shell. Avoid mixing shell commands or assuming an incorrect environment.
+3. If the output is too long, split it into manageable chunks that fit within the terminal width, and prompt the user to request the next part if necessary.
+4. Always check the user's request for typos or ambiguous instructions, and ask for clarification if needed before proceeding.
+5. When a user seems to ask a short hand notation for a command to be executed but isn't ambigious, execute it if it is safe.
+6. If you ask a user to run a command, don't include the command in the command_lines reponse.
 
 You are here to make the user's terminal experience smoother and more efficient. Keep responses clear, concise, and supportive.
 """}]
@@ -74,7 +75,8 @@ def get_response(history, response_model):
 
 def show_message(history, response):
     if (response.message):
-        print(f"{GREEN}CORTEX:{RESET} {response.message}")
+        markdown = Markdown(f"{GREEN}CORTEX:{RESET} {response.message}")
+        console.print(markdown)
         history.append({"role": "assistant", "content": response.message})
     if len(history) > settings.history_size:
         history = history[-settings.history_size:]
@@ -85,9 +87,9 @@ def run_commands(history, response):
     for command_line in response.command_lines:
         output = shell[settings.shell](command_line)
         history.append({"role": "user", "content": f"Executed `{command_line}` with output:\n\n{output}"})
-        # Explain what happened
-        response = get_response(history, ResultResponse)
-        show_message(history, response)        
+        if (settings.explain):
+            response = get_response(history, ResultResponse)
+            show_message(history, response)        
 
 
 if __name__ == "__main__":
