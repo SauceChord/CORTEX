@@ -6,6 +6,7 @@ from openai import OpenAI
 from cortex_lib.shell import run_ps, run_bash
 from cortex_lib.config import settings
 from cortex_lib.responses import RequestResponse, ResultResponse
+import subprocess
 
 load_dotenv()
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
@@ -39,9 +40,18 @@ RED = '\033[31m'   # Red color
 GREEN = '\033[32m' # Green color
 RESET = '\033[0m'  # Reset to default color
 
+def get_git_branch():
+    try:
+        branch = subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], stderr=subprocess.DEVNULL).strip()
+        if branch == "":
+            return ""
+        return f"({branch.decode('utf-8')})"
+    except Exception:
+        return ''
+    
 def cortex_step(history):
     # Obtain user prompt
-    prompt = input(f"{GREEN}{os.getcwd()}: {RESET}")
+    prompt = input(f"{get_git_branch()} {GREEN}{os.getcwd()}: {RESET}")
     if prompt.lower().strip() == "exit":
         print(f"{GREEN}CORTEX:{RESET} Bye!")
         return False
