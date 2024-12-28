@@ -7,11 +7,21 @@ import time
 # .env file should have OPENAI_API_KEY defined, unless set as OS environment variable
 from dotenv import load_dotenv
 
-load_dotenv()
-
 # AI
 from openai import OpenAI
 import instructor
+
+# Console
+from rich.console import Console
+from rich.markdown import Markdown
+
+# App functions and classes
+from cortex_lib.shell import run_ps, run_bash
+from cortex_lib.config import settings_hint, set_settings, get_settings
+from cortex_lib.responses import RequestResponse, ResultResponse
+from cortex_lib.user_prompt import get_user_prompt, get_prompt_mode, PromptMode
+
+load_dotenv()
 
 client = OpenAI(api_key = os.environ.get("OPENAI_API_KEY"))
 client = instructor.from_openai(client)
@@ -34,17 +44,7 @@ Use this enhanced focus to assist the user in executing tasks efficiently,
 ensuring clarity and a seamless workflow."""
 }]
 
-# Console
-from rich.console import Console
-from rich.markdown import Markdown
 console = Console()
-
-
-# App functions and classes
-from cortex_lib.shell import run_ps, run_bash
-from cortex_lib.config import settings_hint, set_settings, get_settings
-from cortex_lib.responses import RequestResponse, ResultResponse
-from cortex_lib.user_prompt import get_user_prompt, get_prompt_mode, PromptMode
 
 history = []
 is_waiting_for_cortex = False
