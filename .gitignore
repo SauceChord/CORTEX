@@ -11,6 +11,7 @@ dist/
 venv/
 env.bak/ 
 *.egg-info/
+*.spec
 
 # Local environment variables
 .env

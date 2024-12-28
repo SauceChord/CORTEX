@@ -11,8 +11,12 @@ class Settings(BaseModel):
     autocomplete: bool
 
 
+# Capture the absolute path of the current working directory
+current_dir = os.path.abspath(os.getcwd())
+config_file_path = os.path.join(current_dir, "config.ini")
+
 def create_default_config():
-    if not os.path.exists("config.ini"):
+    if not os.path.exists(config_file_path):
         print("No config.ini found, creating default...")
         parser["Settings"] = {
             "history_size": 10,
@@ -21,7 +25,7 @@ def create_default_config():
             "explain": "False",
             "autocomplete": "False",
         }
-        with open("config.ini", "w") as configfile:
+        with open(config_file_path, "w") as configfile:
             parser.write(configfile)
 
 
@@ -30,7 +34,7 @@ parser = configparser.ConfigParser()
 # Ensure the default configuration is created on import
 create_default_config()
 
-with open("config.ini") as fd:
+with open(config_file_path) as fd:
     parser.read_file(fd)
 
 settings = Settings(**parser["Settings"])
@@ -59,5 +63,5 @@ def set_settings(new_settings):
     }
 
     # Write the updated configuration back to the file
-    with open("config.ini", "w") as configfile:
+    with open(config_file_path, "w") as configfile:
         parser.write(configfile)
