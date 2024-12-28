@@ -123,7 +123,23 @@ def show_message(history, response):
 def run_commands(history, response):
     if response.command_lines == None:
         return
-    for prompt in response.command_lines:
+    
+    print('\n'.join([str(cmd) for cmd in response.command_lines]))
+    count = len(response.command_lines)
+    plural = "s" if count > 1 else ""
+
+    while True:
+        i = input(f"Run {count} command{plural} ({GREEN}y{RESET}/{GREEN}n{RESET})? ")
+        if i == "n":
+            history.append({"role": "user", "content": "I've declined running your suggestion(s)."})
+            if (settings.explain):
+                response = get_response(history, ResultResponse)
+                show_message(history, response)        
+            return
+        if i == "y":
+            break
+
+    for prompt in response.command_lines:        
         run_command(history, prompt)
 
 if __name__ == "__main__":
