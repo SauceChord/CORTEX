@@ -16,7 +16,7 @@ def run_shell(cmd, shell, switch, path, useShell):
     try:
         print(f"{GREEN}>{RESET} {cmd}")    
         cmd_pwd = (f"({cmd}) ; {path}")
-        cmd_pwd_output = subprocess.run([shell, switch, cmd_pwd], capture_output=True, text=True, shell=useShell, encoding='utf-8')
+        cmd_pwd_output = subprocess.run([shell, switch, cmd_pwd], capture_output=True, text=True, shell=useShell)
         
         # Change current working directory since commands might change it (cd ..) etc
         # This is so CORTEX understands navigation in the directories
