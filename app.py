@@ -9,12 +9,25 @@ from cortex_lib.responses import RequestResponse, ResultResponse
 import subprocess
 from rich.console import Console
 from rich.markdown import Markdown
+import threading
+import time
 
 load_dotenv()
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 client = instructor.from_openai(client)
 history = []
 console = Console()
+
+is_loading = False
+
+def loading():
+    console.show_cursor(False)
+    with console.status("") as status:
+        status.start()
+        while is_loading:
+            time.sleep(0.05)
+        status.stop()
+    console.show_cursor(True)
 
 shell = {
     "powershell": run_ps,
@@ -51,28 +64,53 @@ def get_git_branch():
     except Exception:
         return ''
     
+def talk_to_ai(history, prompt):
+    try:
+        history.append({"role": "user", "content": prompt})
+        response = get_response(history, RequestResponse)
+        show_message(history, response)
+        run_commands(history, response)
+    except Exception as e:
+        print(f"{RED}Error:{RESET} {e}")
+
+def run_command(history, prompt):
+    try:
+        output = shell[settings.shell](prompt)
+        history.append({"role": "user", "content": f"Executed command: {prompt}\nOutput: {output}"})
+        if (settings.explain):
+            response = get_response(history, ResultResponse)
+            show_message(history, response)        
+    except Exception as e:
+        print(f"{RED}Error:{RESET} {e}")
+
 def cortex_step(history):
     # Obtain user prompt
     prompt = input(f"{get_git_branch()} {GREEN}{os.getcwd()}: {RESET}")
     if prompt.lower().strip() == "exit":
         print(f"{GREEN}CORTEX:{RESET} Bye!")
         return False
-    history.append({"role": "user", "content": prompt})
-    try:
-        # Process the users request
-        response = get_response(history, RequestResponse)
-        show_message(history, response)
-        run_commands(history, response)
-    except Exception as e:
-        print(f"{RED}Error:{RESET} {e}")
+    # " means to talk with AI, otherwise, run command.
+    if prompt.startswith('"'):
+        talk_to_ai(history, prompt[1:].strip())
+    else:
+        run_command(history, prompt)
     return True
 
 def get_response(history, response_model):
-    return client.chat.completions.create(
-        model = settings.model,
-        messages = instructions + history,
-        response_model = response_model,
-    )    
+    global is_loading
+    is_loading = True
+    loading_thread = threading.Thread(target=loading)
+    loading_thread.start()    
+    try:
+        result = client.chat.completions.create(
+            model = settings.model,
+            messages = instructions + history,
+            response_model = response_model,
+        )
+    finally:
+        is_loading = False
+        loading_thread.join()
+    return result
 
 def show_message(history, response):
     if (response.message):
@@ -85,13 +123,8 @@ def show_message(history, response):
 def run_commands(history, response):
     if response.command_lines == None:
         return
-    for command_line in response.command_lines:
-        output = shell[settings.shell](command_line)
-        history.append({"role": "user", "content": f"Executed `{command_line}` with output:\n\n{output}"})
-        if (settings.explain):
-            response = get_response(history, ResultResponse)
-            show_message(history, response)        
-
+    for prompt in response.command_lines:
+        run_command(history, prompt)
 
 if __name__ == "__main__":
     print(f"{GREEN}CORTEX:{RESET} Type {GREEN}exit{RESET} to end the session!")
