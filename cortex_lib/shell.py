@@ -21,6 +21,7 @@ def run_shell(cmd, shell, switch, path, useShell):
         # Change current working directory since commands might change it (cd ..) etc
         # This is so CORTEX understands navigation in the directories
         cmd_pwd_lines = cmd_pwd_output.stdout.rstrip().splitlines()
+        print(cmd_pwd_lines)
         os.chdir(cmd_pwd_lines[-1])
 
         # Strip out the current directory and keep the other output from the call
