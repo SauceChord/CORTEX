@@ -1,60 +1,20 @@
 # Standard library
 import os
-import subprocess
 import threading
 import time
 
 # Settings
+# .env file should have OPENAI_API_KEY defined, unless set as OS environment variable
 from dotenv import load_dotenv
+
+load_dotenv()
 
 # AI
 from openai import OpenAI
 import instructor
 
-# Console
-from rich.console import Console
-from rich.markdown import Markdown
-from prompt_toolkit import PromptSession
-from prompt_toolkit.completion import WordCompleter
-from prompt_toolkit.key_binding import KeyBindings
-from prompt_toolkit.keys import Keys
-from prompt_toolkit.formatted_text import FormattedText
-
-# Helpers
-from cortex_lib.shell import run_ps, run_bash
-from cortex_lib.config import settings
-from cortex_lib.responses import RequestResponse, ResultResponse
-
-# .env file should have OPENAI_API_KEY defined, unless set as OS environment variable
-load_dotenv()
 client = OpenAI(api_key = os.environ.get("OPENAI_API_KEY"))
 client = instructor.from_openai(client)
-
-history = []
-console = Console()
-is_waiting_for_cortex = False
-
-class PromptMode:
-    COMMAND = 'command'
-    CHAT = 'chat'
-
-promptMode = PromptMode.COMMAND
-
-bindings = KeyBindings()
-
-# Pressing Ctrl + W changes mode between chat and command. 
-# Default is command.
-@bindings.add(Keys.ControlW)
-def switch_to_command_mode(event):
-    global promptMode
-    promptMode = PromptMode.COMMAND if promptMode == PromptMode.CHAT else PromptMode.CHAT
-    session.app.exit()
-
-# Supported shells, configured in config.ini
-shell = {
-    "powershell": run_ps,
-    "bash": run_bash,
-}
 
 # AI's instructions to adhere to. Always sent to the AI.
 instructions = [{"role": "system", "content": f"""
@@ -71,24 +31,37 @@ Your responses should:
  4 Execute commands directly without asking for permission unless a command is particularly sensitive or may cause harm.
  5 Maintain a clear and concise communication style, ensuring the user understands all actions and results clearly.
 
-You are here to make the user's terminal experience smoother and more efficient. Keep responses clear, concise, and supportive."""}]
+You are here to make the user's terminal experience smoother and more efficient. Keep responses clear, concise, and supportive."""
+}]
+
+# Console
+from rich.console import Console
+from rich.markdown import Markdown
+console = Console()
+
+
+# App functions and classes
+from cortex_lib.shell import run_ps, run_bash
+from cortex_lib.config import settings_hint, set_settings, get_settings
+from cortex_lib.responses import RequestResponse, ResultResponse
+from cortex_lib.user_prompt import get_user_prompt, get_prompt_mode, PromptMode
+
+history = []
+is_waiting_for_cortex = False
+
+# Supported shells, configured in config.ini
+shell = {
+    "powershell": run_ps,
+    "bash": run_bash,
+}
 
 # Helpers for coloring terminal output
 RED = '\033[31m'
 GREEN = '\033[32m'
+YELLOW = '\033[33m'
 RESET = '\033[0m'
-
-def get_git_branch():
-    """
-        Returns the current git branch in the current working directory, if any, or an empty string.
-    """
-    try:
-        branch = subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], stderr=subprocess.DEVNULL).strip()
-        return "" if branch == "" else f"({branch.decode('utf-8')})"
-    except Exception:
-        return ''
     
-def talk_to_ai(history, message_to_cortex):
+def talk_to_cortex(history, message_to_cortex):
     """
         Given a history and a user prompt, talk to the AI.
         The AI will respond with a message that may include
@@ -99,9 +72,24 @@ def talk_to_ai(history, message_to_cortex):
         history.append({"role": "user", "content": message_to_cortex})
         response = cortex_response(history, RequestResponse)
         cortex_says(history, response.message)
+        cortex_configures(history, response.settings)
         cortex_executes(history, response.command_lines)
     except Exception as e:
         print(f"{RED}Error:{RESET} {e}")
+
+def cortex_configures(history, settingsResponse):
+    if not settingsResponse:
+        return
+    print(settingsResponse)
+    settings = get_settings()
+    settings.history_size = settings.history_size if settingsResponse.history_size == None else settingsResponse.history_size
+    settings.shell = settings.shell if settingsResponse.shell == None else settingsResponse.shell
+    settings.model = settings.model if settingsResponse.model == None else settingsResponse.model
+    settings.explain = settings.explain if settingsResponse.explain == None else settingsResponse.explain
+    settings.autocomplete = settings.autocomplete if settingsResponse.autocomplete == None else settingsResponse.autocomplete
+    history.append({"role": "user", "content": settings_hint()})
+    print(settings_hint())
+    set_settings(settings)
 
 def run_command(history, command):
     """
@@ -113,64 +101,22 @@ def run_command(history, command):
         it about it.
     """
     try:
-        output = shell[settings.shell](command)
+        output = shell[get_settings().shell](command)
         history.append({"role": "user", "content": f"Executed command: {command}\nOutput: {output}"})
-        if (settings.explain):
+        if (get_settings().explain):
             response = cortex_response(history, ResultResponse)
             cortex_says(history, response.message)
     except Exception as e:
         print(f"{RED}Error occured during command execution:{RESET} {e}")
 
-def get_user_prompt():
-    """
-        Get user prompt with format
-        (current-git-branch) path/to/current/working/directory:
-    """
-    global session
-    result = None
-    while not result:            
-        if promptMode == PromptMode.COMMAND:
-            file_completer = None if not settings.autocomplete else get_file_completer()
-            session = PromptSession(key_bindings=bindings, completer=file_completer)
-            formatted_text = FormattedText([
-                ('fg:yellow', "RUN"),
-                ('fg:green', " "),
-                ('fg:green', get_git_branch()),
-                ('fg:green', " "),
-                ('fg:gray', os.getcwd()),
-                ('fg:green', ">"),
-            ])
-            result = session.prompt(formatted_text)
-        elif promptMode == PromptMode.CHAT:
-            session = PromptSession(key_bindings=bindings)
-            formatted_text = FormattedText([
-                ('fg:yellow', "CHAT"),
-                ('fg:green', " "),
-                ('fg:green', get_git_branch()),
-                ('fg:green', " "),
-                ('fg:gray', os.getcwd()),
-                ('fg:green', ">"),
-            ])
-            result = session.prompt(formatted_text)
-    return result
-
-def get_file_completer():
-    files = []
-    for dirpath, dirnames, filenames in os.walk('.'):  # Walk through the current directory
-        for filename in filenames:
-            files.append(os.path.relpath(os.path.join(dirpath, filename), os.getcwd())) # Add relative paths
-    file_completer = WordCompleter(files, ignore_case=True)
-    return file_completer
-
 def cortex_step(history):
     """
         Get a user prompt and either
         - Exit
-        - Talk to the AI (start prompt with ")
+        - Talk to the AI
         - Run a command
     """
-    prompt = get_user_prompt()
-        
+    prompt = get_user_prompt()       
 
     # Allow users to exit
     if prompt.lower().strip() == "exit":
@@ -178,9 +124,9 @@ def cortex_step(history):
         return False
 
     # " means to talk with AI, otherwise, run command.
-    if promptMode == PromptMode.CHAT:
-        talk_to_ai(history, prompt)
-    elif promptMode == PromptMode.COMMAND:
+    if get_prompt_mode() == PromptMode.CHAT:
+        talk_to_cortex(history, prompt)
+    elif get_prompt_mode() == PromptMode.COMMAND:
         run_command(history, prompt)
 
     return True
@@ -208,11 +154,12 @@ def cortex_response(history, response_model):
     global is_waiting_for_cortex
     is_waiting_for_cortex = True
     waiting_thread = threading.Thread(target=cortex_waiting)
-    waiting_thread.start()    
+    waiting_thread.start()
+    current_settings = [{"role": "system", "content": settings_hint()}]
     try:
         result = client.chat.completions.create(
-            model = settings.model,
-            messages = instructions + history,
+            model = get_settings().model,
+            messages = instructions + current_settings + history,
             response_model = response_model,
         )
     finally:
@@ -231,8 +178,8 @@ def cortex_says(history, message):
         markdown = Markdown(f"{GREEN}CORTEX:{RESET} {message}")
         console.print(markdown)
         history.append({"role": "assistant", "content": message})
-    if len(history) > settings.history_size:
-        history = history[-settings.history_size:]
+    if len(history) > get_settings().history_size:
+        history = history[-get_settings().history_size:]
 
 def cortex_executes(history, command_lines):
     """
@@ -244,17 +191,18 @@ def cortex_executes(history, command_lines):
         return
     
     # Print a list of commands that cortex wants to run
-    print('\n'.join(command_lines))
+    for command in command_lines:
+        print(f'{YELLOW}{command}{RESET}')
 
     count = len(command_lines)
     plural = "s" if count > 1 else ""
 
     # Wait for the user to approve or deny execution
     while True:
-        choice = input(f"Do you want to run these command{plural}? ({GREEN}yes{RESET}/{GREEN}no{RESET}): ").strip().lower()
+        choice = input(f"Do you want to run above {YELLOW}command{plural}{RESET}? ({GREEN}yes{RESET}/{GREEN}no{RESET}): ").strip().lower()
         if choice == "n" or choice == "no":
             history.append({"role": "user", "content": f"I've declined running your suggestion{plural}."})
-            if (settings.explain):
+            if (get_settings().explain):
                 response = cortex_response(history, ResultResponse)
                 cortex_says(history, response.message)        
             return
@@ -272,6 +220,7 @@ if __name__ == "__main__":
     """
     try:            
         cortex_says(history, "Welcome, I am your helpful shell assistant **Cortex**!")
+        cortex_says(history, "Press `Ctrl + W` to toggle between **RUN** and **CHAT** mode.")
         cortex_says(history, "Type `exit` to end the session!")    
         while cortex_step(history):
             pass

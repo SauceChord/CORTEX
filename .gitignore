@@ -17,3 +17,6 @@ env.bak/
 
 # VS Code settings
 .vscode/
+
+# Cortex user configuration
+config.ini
