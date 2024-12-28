@@ -6,9 +6,11 @@ GREEN = '\033[32m'
 RESET = '\033[0m'
 
 def run_bash(cmd):
+    # On MAC, I noticed that useShell = True hangs applications.
     return run_shell(cmd, shell="bash", switch="-c", path="pwd", useShell=False)
 
 def run_ps(cmd):
+    # On Windows, ChatGPT suggested that useShell = True could cause issues for multi-command execution.
     return run_shell(cmd, shell="powershell", switch="-Command", path="(pwd).Path", useShell=False)
 
 def run_shell(cmd, shell, switch, path, useShell):

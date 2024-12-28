@@ -6,6 +6,7 @@ class Settings(BaseModel):
     shell: str
     model: str
     explain: bool
+    autocomplete: bool
 
 parser = configparser.ConfigParser()
 with open("config.ini") as fd:

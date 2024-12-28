@@ -14,6 +14,11 @@ import instructor
 # Console
 from rich.console import Console
 from rich.markdown import Markdown
+from prompt_toolkit import PromptSession
+from prompt_toolkit.completion import WordCompleter
+from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.keys import Keys
+from prompt_toolkit.formatted_text import FormattedText
 
 # Helpers
 from cortex_lib.shell import run_ps, run_bash
@@ -28,6 +33,22 @@ client = instructor.from_openai(client)
 history = []
 console = Console()
 is_waiting_for_cortex = False
+
+class PromptMode:
+    COMMAND = 'command'
+    CHAT = 'chat'
+
+promptMode = PromptMode.COMMAND
+
+bindings = KeyBindings()
+
+# Pressing Ctrl + W changes mode between chat and command. 
+# Default is command.
+@bindings.add(Keys.ControlW)
+def switch_to_command_mode(event):
+    global promptMode
+    promptMode = PromptMode.COMMAND if promptMode == PromptMode.CHAT else PromptMode.CHAT
+    session.app.exit()
 
 # Supported shells, configured in config.ini
 shell = {
@@ -105,7 +126,41 @@ def get_user_prompt():
         Get user prompt with format
         (current-git-branch) path/to/current/working/directory:
     """
-    return input(f"{get_git_branch()} {GREEN}{os.getcwd()}: {RESET}")
+    global session
+    result = None
+    while not result:            
+        if promptMode == PromptMode.COMMAND:
+            file_completer = None if not settings.autocomplete else get_file_completer()
+            session = PromptSession(key_bindings=bindings, completer=file_completer)
+            formatted_text = FormattedText([
+                ('fg:yellow', "RUN"),
+                ('fg:green', " "),
+                ('fg:green', get_git_branch()),
+                ('fg:green', " "),
+                ('fg:gray', os.getcwd()),
+                ('fg:green', ">"),
+            ])
+            result = session.prompt(formatted_text)
+        elif promptMode == PromptMode.CHAT:
+            session = PromptSession(key_bindings=bindings)
+            formatted_text = FormattedText([
+                ('fg:yellow', "CHAT"),
+                ('fg:green', " "),
+                ('fg:green', get_git_branch()),
+                ('fg:green', " "),
+                ('fg:gray', os.getcwd()),
+                ('fg:green', ">"),
+            ])
+            result = session.prompt(formatted_text)
+    return result
+
+def get_file_completer():
+    files = []
+    for dirpath, dirnames, filenames in os.walk('.'):  # Walk through the current directory
+        for filename in filenames:
+            files.append(os.path.relpath(os.path.join(dirpath, filename), os.getcwd())) # Add relative paths
+    file_completer = WordCompleter(files, ignore_case=True)
+    return file_completer
 
 def cortex_step(history):
     """
@@ -115,6 +170,7 @@ def cortex_step(history):
         - Run a command
     """
     prompt = get_user_prompt()
+        
 
     # Allow users to exit
     if prompt.lower().strip() == "exit":
@@ -122,11 +178,11 @@ def cortex_step(history):
         return False
 
     # " means to talk with AI, otherwise, run command.
-    if prompt.startswith('"'):
-        talk_to_ai(history, prompt[1:].strip())
-    else:
+    if promptMode == PromptMode.CHAT:
+        talk_to_ai(history, prompt)
+    elif promptMode == PromptMode.COMMAND:
         run_command(history, prompt)
-        
+
     return True
 
 def cortex_waiting():
