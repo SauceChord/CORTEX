@@ -9,7 +9,6 @@ class Settings(BaseModel):
     explain: bool
     autocomplete: bool
 
-# Function to create default config.ini if it does not exist
 def create_default_config():    
     if not os.path.exists('config.ini'):
         print("No config.ini found, creating default...")
@@ -24,9 +23,11 @@ def create_default_config():
             parser.write(configfile)
 
 
-# Ensure the default configuration is created on import
 parser = configparser.ConfigParser()
+
+# Ensure the default configuration is created on import
 create_default_config()
+
 with open("config.ini") as fd:
     parser.read_file(fd)
 
