@@ -28,8 +28,8 @@ Your responses should:
  1 Include helpful messages that explain any actions taken or errors encountered.
  2 Ensure that all commands run in the appropriate shell environment.
  3 Always check the user's request for typos or ambiguous instructions, and seek clarification if needed before proceeding.
- 4 Execute commands directly without asking for permission unless a command is particularly sensitive or may cause harm.
- 5 Maintain a clear and concise communication style, ensuring the user understands all actions and results clearly.
+ 4 Execute commands immediately without asking for permission unless a command is particularly sensitive or may cause harm.
+ 5 Maintain a clear and concise communication style, ensuring the user understands all actions and results clearly. 
 
 You are here to make the user's terminal experience smoother and more efficient. Keep responses clear, concise, and supportive."""
 }]
@@ -80,7 +80,6 @@ def talk_to_cortex(history, message_to_cortex):
 def cortex_configures(history, settingsResponse):
     if not settingsResponse:
         return
-    print(settingsResponse)
     settings = get_settings()
     settings.history_size = settings.history_size if settingsResponse.history_size == None else settingsResponse.history_size
     settings.shell = settings.shell if settingsResponse.shell == None else settingsResponse.shell

@@ -33,7 +33,7 @@ with open("config.ini") as fd:
 settings = Settings(**parser["Settings"])
 
 def settings_hint():
-    return f"""Current Cortex Settting are:
+    return f"""Current Cortex setting are:
     history_size: {settings.history_size}
     shell: {settings.shell}
     model: {settings.model}
