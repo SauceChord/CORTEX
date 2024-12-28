@@ -9,7 +9,7 @@ def run_bash(cmd):
     return run_shell(cmd, shell="bash", switch="-c", path="pwd", useShell=False)
 
 def run_ps(cmd):
-    return run_shell(cmd, shell="powershell", switch="-Command", path="(pwd).Path", useShell=True)
+    return run_shell(cmd, shell="powershell", switch="-Command", path="(pwd).Path", useShell=False)
 
 def run_shell(cmd, shell, switch, path, useShell):
     """Run a shell command line on the users machine"""

@@ -67,7 +67,7 @@ def get_git_branch():
     except Exception:
         return ''
     
-def talk_to_ai(history, prompt):
+def talk_to_ai(history, message_to_cortex):
     """
         Given a history and a user prompt, talk to the AI.
         The AI will respond with a message that may include
@@ -75,10 +75,10 @@ def talk_to_ai(history, prompt):
         shell.
     """
     try:
-        history.append({"role": "user", "content": prompt})
+        history.append({"role": "user", "content": message_to_cortex})
         response = cortex_response(history, RequestResponse)
-        cortex_said(history, response)
-        cortex_requests_execution(history, response)
+        cortex_says(history, response.message)
+        cortex_executes(history, response.command_lines)
     except Exception as e:
         print(f"{RED}Error:{RESET} {e}")
 
@@ -96,7 +96,7 @@ def run_command(history, command):
         history.append({"role": "user", "content": f"Executed command: {command}\nOutput: {output}"})
         if (settings.explain):
             response = cortex_response(history, ResultResponse)
-            cortex_said(history, response)
+            cortex_says(history, response.message)
     except Exception as e:
         print(f"{RED}Error occured during command execution:{RESET} {e}")
 
@@ -164,7 +164,7 @@ def cortex_response(history, response_model):
         waiting_thread.join()
     return result
 
-def cortex_said(history, message):
+def cortex_says(history, message):
     """
         Called when CORTEX says something.
         - Printed to screen
@@ -178,7 +178,7 @@ def cortex_said(history, message):
     if len(history) > settings.history_size:
         history = history[-settings.history_size:]
 
-def cortex_requests_execution(history, command_lines):
+def cortex_executes(history, command_lines):
     """
         Given a list of command lines cortex wants to run,
         Present the suggested commands to the user
@@ -200,7 +200,7 @@ def cortex_requests_execution(history, command_lines):
             history.append({"role": "user", "content": f"I've declined running your suggestion{plural}."})
             if (settings.explain):
                 response = cortex_response(history, ResultResponse)
-                cortex_said(history, response.message)        
+                cortex_says(history, response.message)        
             return
         if choice == "y" or choice == "yes":
             break
@@ -214,6 +214,10 @@ if __name__ == "__main__":
         This is the entry point of the program. 
         It keeps looping through cortex_step
     """
-    print(f"{GREEN}CORTEX:{RESET} Type {GREEN}exit{RESET} to end the session!")
-    while cortex_step(history):
+    try:            
+        cortex_says(history, "Welcome, I am your helpful shell assistant **Cortex**!")
+        cortex_says(history, "Type `exit` to end the session!")    
+        while cortex_step(history):
+            pass
+    except KeyboardInterrupt:
         pass
